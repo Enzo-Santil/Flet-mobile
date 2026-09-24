@@ -12,10 +12,12 @@ def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
     # Padding de 60px no topo (fora da área do notch/status bar em celular real) e na base
-    page.padding = 20
+    page.padding = ft.Padding(top=60, bottom=60, left=0, right=0)
 
+    # Flet 1.0: FilePicker é um "serviço" — ele se registra sozinho ao ser
+    # criado, sem precisar de page.services.append(...)/page.overlay. Basta
+    # manter a referência "seletor" viva (ela é capturada por escolher_foto).
     seletor = ft.FilePicker()
-    page.services.append(seletor)  # FilePicker também é um "serviço"
 
     # Placeholder exibido antes de escolher qualquer foto: um quadrado com ícone,
     # do mesmo tamanho final da imagem, para o layout não "pular" quando ela chegar
@@ -24,7 +26,7 @@ def main(page: ft.Page):
         height=200,
         border_radius=16,
         bgcolor="#232A4D",
-        alignment=ft.Alignment.CENTER,   # <-- era ft.alignment.center (minúsculo)
+        alignment=ft.Alignment.CENTER,
         content=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=48, color="#5C7CFA"),
     )
 
@@ -34,6 +36,8 @@ def main(page: ft.Page):
     )
 
     async def escolher_foto(e):
+        # Em 1.0, pick_files() é assíncrono e devolve a lista de arquivos
+        # diretamente (não usa mais um evento on_result separado).
         arquivos = await seletor.pick_files(file_type=ft.FilePickerFileType.IMAGE)
         if arquivos:
             # arquivos[0].path aponta para o arquivo escolhido no dispositivo.
@@ -56,6 +60,7 @@ def main(page: ft.Page):
         ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
             controls=[
+                # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
                 ft.Button(
                     "Escolher foto",
                     icon=ft.Icons.PHOTO_LIBRARY,

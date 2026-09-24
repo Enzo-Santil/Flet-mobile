@@ -29,10 +29,14 @@ def main(page: ft.Page):
             dados = resposta.json()  # texto JSON -> lista de dicts Python (json.loads por baixo dos panos)
         for tarefa in dados:
             lista_view.controls.append(ft.Text(f"• {tarefa['title']}", color="#CDE0F2"))
+        # No Flet 1.0, a tela é atualizada automaticamente ao final do handler,
+        # mas chamar page.update() explicitamente continua funcionando normalmente.
         page.update()
 
     page.add(
-        ft.ElevatedButton("Carregar tarefas", on_click=carregar, bgcolor="#4C8BF5", color="#0B1622"),
+        # Flet 1.0: ft.ElevatedButton virou apenas ft.Button (o texto vai no
+        # 1º argumento posicional ou no parâmetro "content").
+        ft.Button("Carregar tarefas", on_click=carregar, bgcolor="#4C8BF5", color="#0B1622"),
         lista_view,
     )
 

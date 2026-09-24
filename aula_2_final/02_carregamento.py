@@ -17,7 +17,8 @@ def main(page: ft.Page):
 
     lista_view = ft.ListView(expand=True, spacing=6, width=320)
     progresso = ft.ProgressRing(visible=False, color="#2EC4B6")  # some/aparece durante o carregamento
-    botao = ft.ElevatedButton("Carregar tarefas", bgcolor="#2EC4B6", color="#0B2027")
+    # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
+    botao = ft.Button("Carregar tarefas", bgcolor="#2EC4B6", color="#0B2027")
 
     async def carregar(e):
         # Mostra o indicador e desabilita o botão ANTES de iniciar a requisição

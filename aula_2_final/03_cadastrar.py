@@ -68,7 +68,8 @@ def main(page: ft.Page):
     page.add(
         ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
-            controls=[campo, ft.ElevatedButton("Adicionar", on_click=adicionar, bgcolor="#FF7F51", color="#2B1B17")],
+            # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
+            controls=[campo, ft.Button("Adicionar", on_click=adicionar, bgcolor="#FF7F51", color="#2B1B17")],
         ),
         lista_view,
     )

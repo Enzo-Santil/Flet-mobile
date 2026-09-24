@@ -1,12 +1,19 @@
 import os
-import sqlite3
 import re
+import aiosqlite
 import flet as ft
 
 
 # ============================================================
 # CONFIGURAÇÃO DO BANCO DE DADOS
 # ============================================================
+#
+# No Flet 1.0, o app roda em uma única thread (a mesma que desenha a
+# tela). Chamadas bloqueantes como as do módulo padrão "sqlite3"
+# travariam a interface enquanto o banco é acessado. Por isso trocamos
+# "sqlite3" pelo driver assíncrono "aiosqlite" (mesma API, com "await").
+#
+# Instale com: pip install aiosqlite
 
 # Define onde o banco de dados será armazenado.
 # No celular, o Flet utiliza a pasta própria de armazenamento do aplicativo.
@@ -16,7 +23,9 @@ pasta_dados = os.environ.get("FLET_APP_STORAGE_DATA", ".")
 caminho_bd = os.path.join(pasta_dados, "contatos.db")
 
 
-def main(page: ft.Page):
+# main() agora é "async def": abrir a conexão com aiosqlite e fazer
+# qualquer operação no banco exige "await".
+async def main(page: ft.Page):
 
     # ========================================================
     # CONFIGURAÇÃO DA PÁGINA
@@ -43,11 +52,11 @@ def main(page: ft.Page):
     # BANCO DE DADOS
     # ========================================================
 
-    # Abre ou cria o banco de dados.
-    conexao = sqlite3.connect(caminho_bd)
+    # Abre ou cria o banco de dados (de forma assíncrona).
+    conexao = await aiosqlite.connect(caminho_bd)
 
     # Cria a tabela caso ela ainda não exista.
-    conexao.execute(
+    await conexao.execute(
         """
         CREATE TABLE IF NOT EXISTS contatos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +66,7 @@ def main(page: ft.Page):
         """
     )
 
-    conexao.commit()
+    await conexao.commit()
 
     # ========================================================
     # CAMPOS DO FORMULÁRIO
@@ -145,17 +154,17 @@ def main(page: ft.Page):
 
     def build_item(id_contato, nome_c, telefone_c):
 
-        def excluir(e):
+        async def excluir(e):
             # Exclui o contato pelo ID.
-            conexao.execute(
+            await conexao.execute(
                 "DELETE FROM contatos WHERE id = ?",
                 (id_contato,)
             )
 
-            conexao.commit()
+            await conexao.commit()
 
             # Atualiza a lista.
-            atualizar_lista()
+            await atualizar_lista()
 
         return ft.Row(
             controls=[
@@ -177,22 +186,23 @@ def main(page: ft.Page):
     # ATUALIZA A LISTA DE CONTATOS
     # ========================================================
 
-    def atualizar_lista():
+    async def atualizar_lista():
 
         # Limpa a lista atual.
         lista_view.controls.clear()
 
         # Busca novamente os contatos diretamente no banco.
-        cursor = conexao.execute(
+        cursor = await conexao.execute(
             """
             SELECT id, nome, telefone
             FROM contatos
             ORDER BY nome
             """
         )
+        linhas = await cursor.fetchall()
 
         # Adiciona cada contato à tela.
-        for id_c, nome_c, telefone_c in cursor.fetchall():
+        for id_c, nome_c, telefone_c in linhas:
 
             lista_view.controls.append(
                 build_item(
@@ -208,7 +218,7 @@ def main(page: ft.Page):
     # SALVAR CONTATO
     # ========================================================
 
-    def salvar(e):
+    async def salvar(e):
 
         # --------------------------------------------
         # VALIDAÇÃO DO NOME
@@ -216,13 +226,14 @@ def main(page: ft.Page):
 
         if not nome.value or not nome.value.strip():
 
-            nome.error_text = "Informe o nome"
+            # Flet 1.0: a propriedade "error_text" foi renomeada para "error".
+            nome.error = "Informe o nome"
 
             page.update()
 
             return
 
-        nome.error_text = None
+        nome.error = None
 
         # --------------------------------------------
         # VALIDAÇÃO DO TELEFONE
@@ -239,7 +250,7 @@ def main(page: ft.Page):
         # verifica se possui exatamente 11 números.
         if numero and len(numero) != 11:
 
-            telefone.error_text = (
+            telefone.error = (
                 "Informe um celular com 11 números. "
                 "Ex.: (11) 99999-8888"
             )
@@ -248,13 +259,13 @@ def main(page: ft.Page):
 
             return
 
-        telefone.error_text = None
+        telefone.error = None
 
         # --------------------------------------------
         # SALVA NO BANCO
         # --------------------------------------------
 
-        conexao.execute(
+        await conexao.execute(
             """
             INSERT INTO contatos (nome, telefone)
             VALUES (?, ?)
@@ -265,14 +276,14 @@ def main(page: ft.Page):
             )
         )
 
-        conexao.commit()
+        await conexao.commit()
 
         # Limpa os campos depois de salvar.
         nome.value = ""
         telefone.value = ""
 
         # Atualiza a lista.
-        atualizar_lista()
+        await atualizar_lista()
 
     # ========================================================
     # LAYOUT
@@ -286,7 +297,8 @@ def main(page: ft.Page):
                 nome,
                 telefone,
 
-                ft.ElevatedButton(
+                # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
+                ft.Button(
                     "Salvar",
                     on_click=salvar,
                     bgcolor="#6FCF97",
@@ -308,7 +320,7 @@ def main(page: ft.Page):
 
     # Exibe os contatos já existentes
     # assim que o aplicativo é aberto.
-    atualizar_lista()
+    await atualizar_lista()
 
 
 # ============================================================

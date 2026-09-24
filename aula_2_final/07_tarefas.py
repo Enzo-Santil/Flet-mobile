@@ -6,7 +6,7 @@ import httpx
 # persiste de verdade no servidor — por isso combinamos com persistência local)
 API = "https://jsonplaceholder.typicode.com/todos"
 
-# Chave usada no armazenamento local (shared_preferences) para guardar a lista de tarefas
+# Chave usada no armazenamento local (SharedPreferences) para guardar a lista de tarefas
 CHAVE_LOCAL = "app_tarefas_online.lista"
 
 # Cores de prioridade (a mesma paleta usada na Aula 1, para manter a identidade visual do app)
@@ -34,14 +34,19 @@ async def main(page: ft.Page):
     search_query = [""]               # termo de busca atual, usado para filtrar a lista
     carregando = ft.ProgressRing(visible=True, color=BG_DESTAQUE)  # indicador do carregamento inicial
 
-    # ---------- Persistência local (shared_preferences) ----------
+    # ---------- Persistência local (SharedPreferences) ----------
+    # Flet 1.0: não existe mais "page.shared_preferences". Criamos nosso
+    # próprio serviço e o mantemos vivo na variável "prefs" (capturada pelas
+    # funções abaixo), já que main() é async e essa referência não desaparece.
+    prefs = ft.SharedPreferences()
+
     async def salvar_local():
         # Sempre que "tasks" muda, guardamos a lista inteira como uma única string JSON
-        await page.shared_preferences.set(CHAVE_LOCAL, json.dumps(tasks))
+        await prefs.set(CHAVE_LOCAL, json.dumps(tasks))
 
     async def carregar_inicial():
         # 1) Tenta carregar o que já foi salvo localmente em usos anteriores
-        texto = await page.shared_preferences.get(CHAVE_LOCAL)
+        texto = await prefs.get(CHAVE_LOCAL)
         if texto:
             tasks.extend(json.loads(texto))
             next_id[0] = max((t["id"] for t in tasks), default=0) + 1
@@ -80,6 +85,8 @@ async def main(page: ft.Page):
     # ---------- Tela: Lista de tarefas ----------
     def build_task_row(t: dict, atualizar_contador) -> ft.Container:
         def ir_para_detalhe(e):
+            # Chamado a partir de um clique (contexto síncrono): page.navigate()
+            # é a forma indicada para navegar fora de uma função "async def".
             page.navigate(f"/tarefa/{t['id']}")
 
         titulo = ft.Text(
@@ -207,7 +214,8 @@ async def main(page: ft.Page):
 
         async def salvar(e):
             if not titulo.value:
-                titulo.error_text = "Informe um título"
+                # Flet 1.0: "error_text" foi renomeado para "error".
+                titulo.error = "Informe um título"
                 page.update()
                 return
 
@@ -225,7 +233,9 @@ async def main(page: ft.Page):
                 except httpx.HTTPError:
                     pass  # a tarefa já foi atualizada localmente de qualquer forma
                 await salvar_local()
-                page.navigate(f"/tarefa/{task['id']}")
+                # Estamos dentro de uma função "async def": em contexto assíncrono,
+                # o jeito recomendado de navegar é "await page.push_route(...)".
+                await page.push_route(f"/tarefa/{task['id']}")
                 page.show_dialog(ft.SnackBar(ft.Text("Tarefa atualizada com sucesso!")))
             else:
                 nova_tarefa = {
@@ -243,7 +253,7 @@ async def main(page: ft.Page):
                 tasks.append(nova_tarefa)
                 next_id[0] += 1
                 await salvar_local()
-                page.navigate("/")
+                await page.push_route("/")
                 page.show_dialog(ft.SnackBar(ft.Text("Tarefa criada com sucesso!")))
 
         return ft.View(
@@ -257,7 +267,8 @@ async def main(page: ft.Page):
                 descricao,
                 ft.Text("Prioridade:", color="#D8CFF2"),
                 prioridade,
-                ft.ElevatedButton(
+                # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
+                ft.Button(
                     "Salvar alterações" if editando else "Salvar",
                     on_click=salvar, bgcolor=BG_DESTAQUE, color="#161B33"
                 ),
@@ -287,7 +298,8 @@ async def main(page: ft.Page):
             tasks.remove(tarefa)
             await salvar_local()
             page.pop_dialog()
-            page.navigate("/")
+            # Contexto assíncrono: usamos "await page.push_route(...)".
+            await page.push_route("/")
             page.show_dialog(ft.SnackBar(ft.Text("Tarefa excluída.")))
 
         def cancelar(e):
@@ -328,11 +340,12 @@ async def main(page: ft.Page):
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
                     controls=[
-                        ft.ElevatedButton(
+                        # Flet 1.0: ft.ElevatedButton virou apenas ft.Button.
+                        ft.Button(
                             "Editar", icon=ft.Icons.EDIT, on_click=ir_para_edicao,
                             bgcolor=BG_DESTAQUE, color="#161B33",
                         ),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "Excluir", icon=ft.Icons.DELETE, on_click=lambda e: page.show_dialog(dialogo),
                             bgcolor="#FF6B6B", color="#1B2E3D",
                         ),
@@ -342,7 +355,7 @@ async def main(page: ft.Page):
         )
 
     # ---------- Roteamento ----------
-    def route_change(e):
+    def route_change(e=None):
         # Reconstrói toda a pilha de views a partir da rota atual
         page.views.clear()
         page.views.append(view_lista())
@@ -365,16 +378,20 @@ async def main(page: ft.Page):
 
         page.update()
 
-    def view_pop(e):
-        page.views.pop()
-        page.navigate(page.views[-1].route)
+    async def view_pop(e: ft.ViewPopEvent):
+        # Flet 1.0: on_view_pop passa o evento com a view que foi retirada
+        # da pilha (e.view). Removemos exatamente essa view e navegamos, de
+        # forma assíncrona, para a rota da view que ficou no topo.
+        if e.view is not None:
+            page.views.remove(e.view)
+            await page.push_route(page.views[-1].route)
 
     page.on_route_change = route_change
     page.on_view_pop = view_pop
-    route_change(None)          # desenha a tela inicial (lista vazia, com o ProgressRing visível)
+    route_change()          # desenha a tela inicial (lista vazia, com o ProgressRing visível)
 
     await carregar_inicial()    # busca/carrega os dados de verdade...
-    route_change(None)          # ...e reconstrói a lista já com as tarefas prontas
+    route_change()          # ...e reconstrói a lista já com as tarefas prontas
 
 
 ft.run(main)

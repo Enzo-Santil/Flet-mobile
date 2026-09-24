@@ -18,11 +18,17 @@ def main(page: ft.Page):
     # Padding vertical de 60px (topo e base)
     page.padding = ft.Padding(top=60, bottom=60, left=0, right=0)
 
+    # Flet 1.0: não existe mais "page.shared_preferences". Em vez disso,
+    # criamos nosso próprio serviço de armazenamento chave-valor. Ele fica
+    # registrado enquanto houver uma referência Python viva para ele (aqui,
+    # a variável "prefs", capturada pelas funções abaixo).
+    prefs = ft.SharedPreferences()
+
     checkboxes = {}  # nome do filme -> Checkbox correspondente
 
     async def carregar_favoritos():
         # Lê o JSON salvo (se existir) e marca os checkboxes já favoritados
-        texto = await page.shared_preferences.get(CHAVE)
+        texto = await prefs.get(CHAVE)
         favoritos = json.loads(texto) if texto else []
         for filme, caixa in checkboxes.items():
             caixa.value = filme in favoritos
@@ -31,7 +37,7 @@ def main(page: ft.Page):
     async def alternar(e):
         # Sempre que qualquer checkbox muda, recalcula a lista inteira de favoritos e salva
         favoritos = [filme for filme, caixa in checkboxes.items() if caixa.value]
-        await page.shared_preferences.set(CHAVE, json.dumps(favoritos))
+        await prefs.set(CHAVE, json.dumps(favoritos))
 
     for filme in FILMES:
         checkboxes[filme] = ft.Checkbox(
